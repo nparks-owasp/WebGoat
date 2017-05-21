@@ -8,5 +8,6 @@ phases:
 artifacts:
   files:
     - webgoat-server/target/webgoat-server-8.0-SNAPSHOT.jar
+    - webgoat-server/src/main/docker/Dockerfile
   discard-paths: yes
 
