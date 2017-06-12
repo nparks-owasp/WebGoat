@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >
-  AWS Cloud Formation for creating an AWS CodePipeline that checks a git repo for changes and then performs a build using code build
+  Creates a pipeline that checks changes from git repo, performs a maven build, performs a docker build, pushes to ECR. Define registry and ecs task and service definition. Uses the stack-name for id collision prevention
 
 
 Parameters:
@@ -15,7 +15,7 @@ Parameters:
     Type: String
     MinLength: 1
   qsCodeRepo:
-    Description: The Repository
+    Description: The Code Repository
     Type: String
     MinLength: 1
   qsRepoBranch:
@@ -41,7 +41,7 @@ Parameters:
     Default: WG-mvnBuild
     MinLength: 1
   qsDockerBuildName:
-    Description: Name of the AWS Code Build
+    Description: Name of the AWS Code Build Docker Step
     Type: String
     Default: WG-Docker
     MinLength: 1
@@ -55,9 +55,17 @@ Parameters:
     MinLength: 1
   qsECRrepositoryName:
     Description: The The name for the ECR repository
-    Default: WebGoat8CD
+    Default: webgoatcd
     Type: String
     MinLength: 1
+  qsECSserviceroleRoleARN:
+    Description: The complete ARN to the IAM role/instance profile for the cluster
+    Type: String
+    MinLength: 1
+  qsDesiredCount:
+    Description: Desired ECS cluster count
+    Type: Number
+    Default: 1
 
 
 
@@ -69,6 +77,28 @@ Resources:
       RepositoryName: !Ref 'qsECRrepositoryName'
 
 
+  stkService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Sub ${AWS::StackName}-WebGoat-ecscluster
+      Role: !Ref qsECSserviceroleRoleARN
+      DesiredCount: !Ref qsDesiredCount
+      TaskDefinition: !Ref stkTaskDefinition
+      LoadBalancers:
+        - ContainerName: WebGoat
+          ContainerPort: 80
+          TargetGroupArn: !Sub ${AWS::StackName}-WebGoat-tg
+
+  stkTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-WebGoat-tskdef
+      ContainerDefinitions:
+        - Name: WebGoat
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}:latest
+          Memory: 1024
+          PortMappings:
+            - ContainerPort: 8080
 
 
 # Pipeline Items
@@ -99,34 +129,33 @@ Resources:
         Type: CODEPIPELINE
       Description: Builds WebGoat Container image using built jar and docker file
       EncryptionKey: !Ref 'qsKMSKeyARN'
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/docker:1.12.1
-        Type: LINUX_CONTAINER
-        EnvironmentVariables:
-          - Name: ECRREPO 
-            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}
-      Name: !Ref 'qsDockerBuildName'
-      ServiceRole: !Ref 'qsCodeRoleArn'
       TimeoutInMinutes: 10
       Source:
         Type: CODEPIPELINE
         BuildSpec: |
           version: 0.2
           phases:
-            pre_build:
+            build:
               commands:
+                - ls -la
                 - $(aws ecr get-login)
-              build:
-                commands:
-                  - docker build --tag "${ECRREPO}:latest" .
-              post_build:
-                commands:
-                  - docker push "${ECRREPO}:latest"
-                  - printf '{"tag": "latest","image":"%s","from":"%s"}' $CODEBUILD_RESOLVED_SOURCE_VERSION $ECRREPO > dkrbuild.json
+                - docker build --tag ${ECRREPO}:latest .
+                - docker push ${ECRREPO}:latest
+                - echo $CODEBUILD_RESOLVED_SOURCE_VERSION  > dkrbuild.txt
           artifacts:
-            files: dkrbuild.json
-
+            files: 
+              - dkrbuild.txt
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/docker:1.12.1
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWSREGION
+            Value: !Ref AWS::Region
+          - Name: ECRREPO 
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}
+      Name: !Ref 'qsDockerBuildName'
+      ServiceRole: !Ref 'qsCodeRoleArn'
 
 
   stkcplPipeline:
@@ -185,8 +214,15 @@ Resources:
                 - Name: MyResult
               RunOrder: '1'
 
+
+
+
+
+
+
 Outputs:
   PipelineUrl:
-    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${stkcplPipeline}
   ImageRepo:
-    value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}
+
