@@ -39,7 +39,7 @@
                     "Ref": "qsRoleName"
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AWSCodeCommitFullAccess",
+                    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser",
                     "arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess",
                     "arn:aws:iam::aws:policy/AWSCodeDeployDeployerAccess"
                 ],
