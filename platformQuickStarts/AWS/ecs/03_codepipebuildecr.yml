@@ -62,43 +62,17 @@ Parameters:
     Description: The complete ARN to the IAM role/instance profile for the cluster
     Type: String
     MinLength: 1
-  qsDesiredCount:
-    Description: Desired ECS cluster count
-    Type: Number
-    Default: 1
 
 
 
 Resources:
-# ECR ECS Setup
+# ECR Setup
   stkECRrepo:
     Type: "AWS::ECR::Repository"
     Properties:
       RepositoryName: !Ref 'qsECRrepositoryName'
 
 
-  stkService:
-    Type: AWS::ECS::Service
-    Properties:
-      Cluster: !Sub ${AWS::StackName}-WebGoat-ecscluster
-      Role: !Ref qsECSserviceroleRoleARN
-      DesiredCount: !Ref qsDesiredCount
-      TaskDefinition: !Ref stkTaskDefinition
-      LoadBalancers:
-        - ContainerName: WebGoat
-          ContainerPort: 80
-          TargetGroupArn: !Sub ${AWS::StackName}-WebGoat-tg
-
-  stkTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: !Sub ${AWS::StackName}-WebGoat-tskdef
-      ContainerDefinitions:
-        - Name: WebGoat
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${stkECRrepo}:latest
-          Memory: 1024
-          PortMappings:
-            - ContainerPort: 8080
 
 
 # Pipeline Items
