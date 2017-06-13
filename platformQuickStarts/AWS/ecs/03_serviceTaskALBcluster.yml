@@ -1,0 +1,71 @@
+
+Description: >
+  Creates The EcS Service using the previously defined registry in same region
+
+
+Parameters:
+
+
+
+  qsECRrepositoryName:
+    Description: The The name for the existing ECR repository
+    Default: webgoatcd
+    Type: String
+    MinLength: 1
+  qsEcsClusterName:
+    Description: The The name for the ECS Cluster
+    Default: webgoat-cluster
+    Type: String
+    MinLength: 1
+  qsECSserviceroleRoleARN:
+    Description: The complete ARN to the IAM role/instance profile for the cluster
+    Type: String
+    MinLength: 1
+
+  qsALBsubnets:
+    Description: The Subnets in the VPC
+    Type: List<AWS::EC2::Subnet::Id>
+    MinLength: 1
+  qsALBvpcid:
+    Description: The VPC where application will be deployed
+    Type: AWS::EC2::VPC::Id
+
+
+
+
+Resources:
+
+#ECS Definition Items
+  stkEcsCluster:
+    Type: "AWS::ECS::Cluster"
+    Properties:
+      ClusterName: !Ref qsEcsClusterName
+
+
+  stkService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref stkEcsCluster
+      Role: !Ref qsECSserviceroleRoleARN
+      DesiredCount: 2
+      TaskDefinition: !Ref stkTaskDefinition
+      LoadBalancers:
+        - ContainerName: WebGoat
+          ContainerPort: 8080
+          TargetGroupArn: !Ref stkTargetGroup
+          
+
+  stkTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-WebGoat-tskdef
+      ContainerDefinitions:
+        - Name: WebGoat
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${qsECRrepositoryName}:latest
+          Memory: 1024
+          PortMappings:
+            - ContainerPort: 8080
+
+
+# ECS ALB for cluster
+
